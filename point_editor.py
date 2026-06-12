@@ -1,0 +1,736 @@
+import json
+
+
+def make_point_editor_html(config):
+    config_json = json.dumps(config)
+    return _POINT_EDITOR_HTML.replace("__CONFIG__", config_json)
+
+
+_POINT_EDITOR_HTML = r"""
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    :root {
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #cbd5e1;
+      --panel: #ffffff;
+      --soft: #f8fafc;
+      --blue: #2563eb;
+      --red: #dc2626;
+      --green: #059669;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: #fff;
+    }
+    .shell {
+      width: 100%;
+      padding: 4px 0 18px;
+    }
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(140px, 1fr));
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 12px;
+    }
+    .control {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: var(--soft);
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 650;
+      color: #334155;
+      margin-bottom: 6px;
+    }
+    input[type="range"] { width: 100%; }
+    input[type="number"] {
+      width: 100%;
+      height: 30px;
+      padding: 4px 7px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--ink);
+      background: #fff;
+    }
+    button {
+      height: 34px;
+      border: 1px solid #94a3b8;
+      border-radius: 7px;
+      color: var(--ink);
+      background: #fff;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    button:hover { background: #f1f5f9; }
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      font-size: 13px;
+      font-weight: 650;
+      color: #334155;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin: 8px 0 14px;
+    }
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fff;
+    }
+    .metric span {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 3px;
+    }
+    .metric strong {
+      font-size: 22px;
+      font-weight: 750;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(420px, 1fr) minmax(420px, 1fr);
+      gap: 14px;
+    }
+    .panel {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: var(--panel);
+    }
+    .panel h3 {
+      margin: 0 0 8px;
+      font-size: 15px;
+    }
+    .wide { margin-top: 14px; }
+    #editor {
+      width: 100%;
+      height: 390px;
+      display: block;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: #fff;
+      user-select: none;
+      touch-action: none;
+    }
+    canvas {
+      width: 100%;
+      height: 390px;
+      display: block;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: #fff;
+    }
+    #buildCanvas { height: 460px; }
+    .hint {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    @media (max-width: 900px) {
+      .toolbar { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="toolbar">
+      <div class="control">
+        <label for="selectedDepo">Selected depo x: <span id="selectedDepoLabel"></span></label>
+        <input id="selectedDepo" type="range" min="0" max="1" step="0.01" />
+      </div>
+      <div class="control">
+        <label for="maxDepo">Max deposition x</label>
+        <input id="maxDepo" type="number" min="0.01" step="0.1" />
+      </div>
+      <div class="control">
+        <label for="buildFrame">Build-up frame: <span id="buildFrameLabel"></span></label>
+        <input id="buildFrame" type="range" min="0" max="12" step="1" />
+      </div>
+      <div class="control">
+        <label for="layerCount">Layer count</label>
+        <input id="layerCount" type="number" min="3" max="30" step="1" />
+      </div>
+      <div class="control">
+        <div class="toggle">
+          <input id="smoothCurve" type="checkbox" checked />
+          <span>Smooth curve</span>
+        </div>
+      </div>
+      <button id="resetBtn" type="button">Reset shape</button>
+      <button id="deleteBtn" type="button">Delete point</button>
+    </div>
+
+    <div class="metrics">
+      <div class="metric"><span>Remaining depth y</span><strong id="metricDepth">-</strong></div>
+      <div class="metric"><span>Depth improvement</span><strong id="metricImprove">-</strong></div>
+      <div class="metric"><span>Max tangent angle z</span><strong id="metricAngle">-</strong></div>
+      <div class="metric"><span>Selected point</span><strong id="metricPoint">-</strong></div>
+    </div>
+
+    <div class="grid">
+      <section class="panel">
+        <h3>Dent point editor</h3>
+        <svg id="editor" viewBox="0 0 760 390" preserveAspectRatio="none"></svg>
+        <p class="hint">Drag white points to edit the dent. Double-click the curve area to add a point. Select an inner point and press Delete, or use Delete point.</p>
+      </section>
+      <section class="panel">
+        <h3>y(x) and z(x) from edited dent</h3>
+        <canvas id="sweepCanvas"></canvas>
+      </section>
+    </div>
+
+    <section class="panel wide">
+      <h3>Deposition build-up from edited dent</h3>
+      <canvas id="buildCanvas"></canvas>
+    </section>
+  </div>
+
+  <script>
+    const CONFIG = __CONFIG__;
+    let nextId = 1;
+    const state = {
+      width: CONFIG.width,
+      depth: CONFIG.depth,
+      maxDepo: CONFIG.maxDeposition,
+      selectedDepo: Math.min(CONFIG.selectedDeposition, CONFIG.maxDeposition),
+      layerCount: Math.max(3, Math.min(30, Math.round(CONFIG.layerCount))),
+      buildFrame: Math.max(0, Math.min(Math.round(CONFIG.layerCount), Math.round(CONFIG.layerCount))),
+      smooth: true,
+      points: CONFIG.points.map((p, index) => ({
+        id: nextId++,
+        x: p.x,
+        y: p.y,
+        locked: index === 0 || index === CONFIG.points.length - 1
+      })),
+      selectedId: null,
+      draggingId: null
+    };
+    const defaultPoints = state.points.map(p => ({ ...p, id: p.id }));
+    const editor = document.getElementById("editor");
+    const sweepCanvas = document.getElementById("sweepCanvas");
+    const buildCanvas = document.getElementById("buildCanvas");
+    const selectedDepoInput = document.getElementById("selectedDepo");
+    const maxDepoInput = document.getElementById("maxDepo");
+    const buildFrameInput = document.getElementById("buildFrame");
+    const layerCountInput = document.getElementById("layerCount");
+    const smoothInput = document.getElementById("smoothCurve");
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function sortedPoints() {
+      return [...state.points].sort((a, b) => a.x - b.x);
+    }
+
+    function yRange() {
+      return {
+        min: -state.depth * 1.18,
+        max: Math.max(state.selectedDepo * 1.2, state.depth * 0.2, 0.25)
+      };
+    }
+
+    function editorScale() {
+      const padLeft = 46;
+      const padRight = 24;
+      const padTop = 22;
+      const padBottom = 42;
+      const xMin = -state.width / 2;
+      const xMax = state.width / 2;
+      const yr = yRange();
+      return {
+        xMin, xMax,
+        yMin: yr.min,
+        yMax: yr.max,
+        padLeft, padRight, padTop, padBottom,
+        width: 760,
+        height: 390,
+        plotW: 760 - padLeft - padRight,
+        plotH: 390 - padTop - padBottom
+      };
+    }
+
+    function xToSvg(x) {
+      const s = editorScale();
+      return s.padLeft + ((x - s.xMin) / (s.xMax - s.xMin)) * s.plotW;
+    }
+
+    function yToSvg(y) {
+      const s = editorScale();
+      return s.padTop + ((s.yMax - y) / (s.yMax - s.yMin)) * s.plotH;
+    }
+
+    function svgToPoint(evt) {
+      const rect = editor.getBoundingClientRect();
+      const sx = (evt.clientX - rect.left) * 760 / rect.width;
+      const sy = (evt.clientY - rect.top) * 390 / rect.height;
+      const s = editorScale();
+      const x = s.xMin + ((sx - s.padLeft) / s.plotW) * (s.xMax - s.xMin);
+      const y = s.yMax - ((sy - s.padTop) / s.plotH) * (s.yMax - s.yMin);
+      return { x, y };
+    }
+
+    function makeSvg(tag, attrs) {
+      const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+      Object.entries(attrs).forEach(([key, value]) => el.setAttribute(key, String(value)));
+      return el;
+    }
+
+    function profileAt(x) {
+      const half = state.width / 2;
+      if (x <= -half || x >= half) return 0;
+      const pts = sortedPoints();
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i];
+        const b = pts[i + 1];
+        if (x >= a.x && x <= b.x) {
+          const span = Math.max(b.x - a.x, 1e-9);
+          const t = clamp((x - a.x) / span, 0, 1);
+          let y;
+          if (state.smooth && pts.length > 3) {
+            const p0 = pts[Math.max(0, i - 1)];
+            const p1 = a;
+            const p2 = b;
+            const p3 = pts[Math.min(pts.length - 1, i + 2)];
+            const t2 = t * t;
+            const t3 = t2 * t;
+            y = 0.5 * (
+              (2 * p1.y) +
+              (-p0.y + p2.y) * t +
+              (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
+              (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3
+            );
+          } else {
+            y = a.y + (b.y - a.y) * t;
+          }
+          return Math.min(0, Math.max(-state.depth * 1.5, y));
+        }
+      }
+      return 0;
+    }
+
+    function evaluateDeposition(deposition, sampleCount = 211) {
+      if (sampleCount % 2 === 0) sampleCount += 1;
+      const half = state.width / 2;
+      const margin = Math.max(state.width * 0.35, deposition * 1.4, state.depth * 0.15);
+      const baseX = [];
+      const baseY = [];
+      for (let i = 0; i < sampleCount; i++) {
+        const x = -half - margin + (2 * (half + margin) * i) / (sampleCount - 1);
+        baseX.push(x);
+        baseY.push(Math.abs(x) <= half ? profileAt(x) : 0);
+      }
+      const viewX = [];
+      const surface = [];
+      for (let i = 0; i < sampleCount; i++) {
+        const x = -half + (state.width * i) / (sampleCount - 1);
+        viewX.push(x);
+        if (deposition <= 0) {
+          surface.push(profileAt(x));
+          continue;
+        }
+        let highest = -Infinity;
+        for (let j = 0; j < baseX.length; j++) {
+          const dx = x - baseX[j];
+          if (Math.abs(dx) <= deposition) {
+            const candidate = baseY[j] + Math.sqrt(Math.max(deposition * deposition - dx * dx, 0));
+            if (candidate > highest) highest = candidate;
+          }
+        }
+        if (!Number.isFinite(highest)) highest = profileAt(x);
+        surface.push(Math.min(highest, deposition));
+      }
+      const minSurface = Math.min(...surface);
+      const depth = Math.max(0, deposition - minSurface);
+      let maxSlope = 0;
+      for (let i = 1; i < surface.length - 1; i++) {
+        const slope = (surface[i + 1] - surface[i - 1]) / (viewX[i + 1] - viewX[i - 1]);
+        maxSlope = Math.max(maxSlope, Math.abs(slope));
+      }
+      return {
+        viewX,
+        surface,
+        depth,
+        angle: Math.atan(maxSlope) * 180 / Math.PI,
+        baseX,
+        baseY
+      };
+    }
+
+    function runSweep() {
+      const n = 110;
+      const xs = [];
+      const depths = [];
+      const angles = [];
+      for (let i = 0; i < n; i++) {
+        const x = state.maxDepo * i / (n - 1);
+        const result = evaluateDeposition(x, 171);
+        xs.push(x);
+        depths.push(result.depth);
+        angles.push(result.angle);
+      }
+      return { xs, depths, angles };
+    }
+
+    function setupCanvas(canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      const w = Math.max(1, Math.round(rect.width * ratio));
+      const h = Math.max(1, Math.round(rect.height * ratio));
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      return { ctx, w: rect.width, h: rect.height };
+    }
+
+    function drawAxes(ctx, w, h, pad) {
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = "#e2e8f0";
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 5; i++) {
+        const x = pad.l + (w - pad.l - pad.r) * i / 5;
+        const y = pad.t + (h - pad.t - pad.b) * i / 5;
+        ctx.beginPath();
+        ctx.moveTo(x, pad.t);
+        ctx.lineTo(x, h - pad.b);
+        ctx.moveTo(pad.l, y);
+        ctx.lineTo(w - pad.r, y);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = "#94a3b8";
+      ctx.beginPath();
+      ctx.moveTo(pad.l, pad.t);
+      ctx.lineTo(pad.l, h - pad.b);
+      ctx.lineTo(w - pad.r, h - pad.b);
+      ctx.stroke();
+    }
+
+    function drawSweepCanvas() {
+      const { ctx, w, h } = setupCanvas(sweepCanvas);
+      const pad = { l: 54, r: 54, t: 26, b: 42 };
+      drawAxes(ctx, w, h, pad);
+      const data = runSweep();
+      const xMax = Math.max(state.maxDepo, 1e-6);
+      const yMax = Math.max(state.depth * 1.05, Math.max(...data.depths) * 1.05, 1);
+      const zMax = 90;
+      const mapX = x => pad.l + (x / xMax) * (w - pad.l - pad.r);
+      const mapY = y => h - pad.b - (y / yMax) * (h - pad.t - pad.b);
+      const mapZ = z => h - pad.b - (z / zMax) * (h - pad.t - pad.b);
+      function line(values, mapper, color) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        values.forEach((value, i) => {
+          const x = mapX(data.xs[i]);
+          const y = mapper(value);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+      line(data.depths, mapY, "#2563eb");
+      line(data.angles, mapZ, "#dc2626");
+      const selectedX = mapX(state.selectedDepo);
+      ctx.strokeStyle = "#334155";
+      ctx.setLineDash([6, 5]);
+      ctx.beginPath();
+      ctx.moveTo(selectedX, pad.t);
+      ctx.lineTo(selectedX, h - pad.b);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#0f172a";
+      ctx.font = "12px system-ui";
+      ctx.fillText("x deposition", w / 2 - 36, h - 12);
+      ctx.fillStyle = "#2563eb";
+      ctx.fillText("y depth", 10, pad.t + 12);
+      ctx.fillStyle = "#dc2626";
+      ctx.fillText("z angle", w - pad.r + 8, pad.t + 12);
+    }
+
+    function drawBuildCanvas() {
+      const { ctx, w, h } = setupCanvas(buildCanvas);
+      const pad = { l: 58, r: 22, t: 30, b: 44 };
+      drawAxes(ctx, w, h, pad);
+      const activeDepo = state.selectedDepo * state.buildFrame / Math.max(state.layerCount, 1);
+      const yMin = -state.depth * 1.12;
+      const yMax = Math.max(activeDepo * 1.18, state.depth * 0.24, 0.25);
+      const half = state.width / 2;
+      const mapX = x => pad.l + ((x + half) / state.width) * (w - pad.l - pad.r);
+      const mapY = y => h - pad.b - ((y - yMin) / (yMax - yMin)) * (h - pad.t - pad.b);
+      const layers = Math.max(1, state.buildFrame);
+      const surfaces = [];
+      for (let i = 0; i <= layers; i++) {
+        const dep = activeDepo * i / layers;
+        surfaces.push(evaluateDeposition(dep, 191));
+      }
+      for (let i = 1; i < surfaces.length; i++) {
+        const prev = surfaces[i - 1];
+        const cur = surfaces[i];
+        const alpha = 0.12 + 0.36 * i / surfaces.length;
+        ctx.fillStyle = `rgba(16, 185, 129, ${alpha})`;
+        ctx.beginPath();
+        cur.viewX.forEach((x, idx) => {
+          const px = mapX(x);
+          const py = mapY(cur.surface[idx]);
+          if (idx === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        });
+        for (let idx = prev.viewX.length - 1; idx >= 0; idx--) {
+          ctx.lineTo(mapX(prev.viewX[idx]), mapY(prev.surface[idx]));
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+      const base = surfaces[0];
+      ctx.strokeStyle = "#475569";
+      ctx.setLineDash([6, 5]);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      base.viewX.forEach((x, i) => {
+        const px = mapX(x);
+        const py = mapY(base.surface[i]);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const last = surfaces[surfaces.length - 1];
+      ctx.strokeStyle = "#047857";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      last.viewX.forEach((x, i) => {
+        const px = mapX(x);
+        const py = mapY(last.surface[i]);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+      ctx.strokeStyle = "#111827";
+      ctx.lineWidth = 2;
+      const flatY = mapY(activeDepo);
+      ctx.beginPath();
+      ctx.moveTo(pad.l, flatY);
+      ctx.lineTo(w - pad.r, flatY);
+      ctx.stroke();
+      ctx.fillStyle = "#0f172a";
+      ctx.font = "12px system-ui";
+      ctx.fillText(`active depo x=${activeDepo.toFixed(3)}`, pad.l + 8, Math.max(pad.t + 14, flatY - 8));
+    }
+
+    function drawEditor() {
+      editor.innerHTML = "";
+      const s = editorScale();
+      const plot = makeSvg("rect", {
+        x: s.padLeft, y: s.padTop, width: s.plotW, height: s.plotH,
+        fill: "#ffffff", stroke: "#e2e8f0", "stroke-width": 1
+      });
+      editor.appendChild(plot);
+      for (let i = 0; i <= 6; i++) {
+        const x = s.padLeft + s.plotW * i / 6;
+        const y = s.padTop + s.plotH * i / 6;
+        editor.appendChild(makeSvg("line", { x1: x, y1: s.padTop, x2: x, y2: s.padTop + s.plotH, stroke: "#eef2f7", "stroke-width": 1 }));
+        editor.appendChild(makeSvg("line", { x1: s.padLeft, y1: y, x2: s.padLeft + s.plotW, y2: y, stroke: "#eef2f7", "stroke-width": 1 }));
+      }
+      const samples = [];
+      for (let i = 0; i <= 180; i++) {
+        const x = -state.width / 2 + state.width * i / 180;
+        samples.push([xToSvg(x), yToSvg(profileAt(x))]);
+      }
+      const areaPath = [
+        `M ${xToSvg(-state.width / 2)} ${yToSvg(0)}`,
+        ...samples.map(([x, y]) => `L ${x} ${y}`),
+        `L ${xToSvg(state.width / 2)} ${yToSvg(0)}`,
+        "Z"
+      ].join(" ");
+      editor.appendChild(makeSvg("path", { d: areaPath, fill: "rgba(37, 99, 235, 0.08)", stroke: "none" }));
+      const linePath = samples.map(([x, y], i) => `${i === 0 ? "M" : "L"} ${x} ${y}`).join(" ");
+      editor.appendChild(makeSvg("path", { d: linePath, fill: "none", stroke: "#2563eb", "stroke-width": 3 }));
+      const topLine = makeSvg("line", {
+        x1: xToSvg(-state.width / 2), y1: yToSvg(0),
+        x2: xToSvg(state.width / 2), y2: yToSvg(0),
+        stroke: "#111827", "stroke-width": 1.5
+      });
+      editor.appendChild(topLine);
+      sortedPoints().forEach((point, index) => {
+        const r = point.locked ? 6 : 7;
+        const selected = point.id === state.selectedId;
+        const c = makeSvg("circle", {
+          cx: xToSvg(point.x),
+          cy: yToSvg(point.y),
+          r,
+          fill: selected ? "#facc15" : "#ffffff",
+          stroke: point.locked ? "#475569" : "#0f172a",
+          "stroke-width": selected ? 3 : 2,
+          cursor: point.locked ? "default" : "grab",
+          "data-id": point.id
+        });
+        c.addEventListener("mousedown", evt => {
+          evt.preventDefault();
+          state.selectedId = point.id;
+          if (!point.locked) state.draggingId = point.id;
+          updateAll();
+        });
+        editor.appendChild(c);
+        const label = makeSvg("text", {
+          x: xToSvg(point.x) + 9,
+          y: yToSvg(point.y) - 9,
+          fill: "#64748b",
+          "font-size": 11
+        });
+        label.textContent = index + 1;
+        editor.appendChild(label);
+      });
+      const axisText = makeSvg("text", { x: s.padLeft, y: 382, fill: "#64748b", "font-size": 12 });
+      axisText.textContent = `W=${state.width.toFixed(3)}, D=${state.depth.toFixed(3)}`;
+      editor.appendChild(axisText);
+    }
+
+    function selectedPointText() {
+      const point = state.points.find(p => p.id === state.selectedId);
+      if (!point) return "-";
+      return `${point.x.toFixed(2)}, ${point.y.toFixed(2)}`;
+    }
+
+    function syncControls() {
+      selectedDepoInput.max = String(state.maxDepo);
+      selectedDepoInput.step = String(Math.max(state.maxDepo / 250, 0.001));
+      selectedDepoInput.value = String(state.selectedDepo);
+      maxDepoInput.value = String(state.maxDepo);
+      layerCountInput.value = String(state.layerCount);
+      buildFrameInput.max = String(state.layerCount);
+      buildFrameInput.value = String(state.buildFrame);
+      smoothInput.checked = state.smooth;
+      document.getElementById("selectedDepoLabel").textContent = state.selectedDepo.toFixed(3);
+      document.getElementById("buildFrameLabel").textContent = `${state.buildFrame}/${state.layerCount}`;
+    }
+
+    function updateMetrics() {
+      const result = evaluateDeposition(state.selectedDepo, 211);
+      const improvement = Math.max(0, state.depth - result.depth);
+      const pct = 100 * improvement / Math.max(state.depth, 1e-9);
+      document.getElementById("metricDepth").textContent = result.depth.toFixed(3);
+      document.getElementById("metricImprove").textContent = `${improvement.toFixed(3)} (${pct.toFixed(1)}%)`;
+      document.getElementById("metricAngle").textContent = `${result.angle.toFixed(2)} deg`;
+      document.getElementById("metricPoint").textContent = selectedPointText();
+    }
+
+    function updateAll() {
+      syncControls();
+      drawEditor();
+      updateMetrics();
+      drawSweepCanvas();
+      drawBuildCanvas();
+    }
+
+    function addPointFromEvent(evt) {
+      const pt = svgToPoint(evt);
+      const half = state.width / 2;
+      const x = clamp(pt.x, -half + state.width * 0.02, half - state.width * 0.02);
+      const y = clamp(pt.y, -state.depth * 1.15, 0);
+      const newPoint = { id: nextId++, x, y, locked: false };
+      state.points.push(newPoint);
+      state.selectedId = newPoint.id;
+      updateAll();
+    }
+
+    editor.addEventListener("dblclick", evt => {
+      if (evt.target.tagName.toLowerCase() === "circle") return;
+      addPointFromEvent(evt);
+    });
+
+    window.addEventListener("mousemove", evt => {
+      if (!state.draggingId) return;
+      const point = state.points.find(p => p.id === state.draggingId);
+      if (!point || point.locked) return;
+      const pts = sortedPoints();
+      const index = pts.findIndex(p => p.id === point.id);
+      const prev = pts[index - 1];
+      const next = pts[index + 1];
+      const coord = svgToPoint(evt);
+      const minGap = state.width * 0.012;
+      point.x = clamp(coord.x, prev.x + minGap, next.x - minGap);
+      point.y = clamp(coord.y, -state.depth * 1.15, 0);
+      updateAll();
+    });
+
+    window.addEventListener("mouseup", () => {
+      state.draggingId = null;
+    });
+
+    window.addEventListener("keydown", evt => {
+      if (evt.key === "Delete" || evt.key === "Backspace") {
+        deleteSelectedPoint();
+      }
+    });
+
+    function deleteSelectedPoint() {
+      const point = state.points.find(p => p.id === state.selectedId);
+      if (!point || point.locked) return;
+      state.points = state.points.filter(p => p.id !== state.selectedId);
+      state.selectedId = null;
+      updateAll();
+    }
+
+    document.getElementById("deleteBtn").addEventListener("click", deleteSelectedPoint);
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      state.points = defaultPoints.map(p => ({ ...p, id: nextId++ }));
+      state.selectedId = null;
+      updateAll();
+    });
+    selectedDepoInput.addEventListener("input", evt => {
+      state.selectedDepo = Number(evt.target.value);
+      updateAll();
+    });
+    maxDepoInput.addEventListener("change", evt => {
+      state.maxDepo = Math.max(0.01, Number(evt.target.value) || state.maxDepo);
+      state.selectedDepo = Math.min(state.selectedDepo, state.maxDepo);
+      updateAll();
+    });
+    buildFrameInput.addEventListener("input", evt => {
+      state.buildFrame = Math.round(Number(evt.target.value));
+      updateAll();
+    });
+    layerCountInput.addEventListener("change", evt => {
+      state.layerCount = Math.max(3, Math.min(30, Math.round(Number(evt.target.value) || state.layerCount)));
+      state.buildFrame = Math.min(state.buildFrame, state.layerCount);
+      buildFrameInput.max = String(state.layerCount);
+      updateAll();
+    });
+    smoothInput.addEventListener("change", evt => {
+      state.smooth = evt.target.checked;
+      updateAll();
+    });
+    window.addEventListener("resize", updateAll);
+    updateAll();
+  </script>
+</body>
+</html>
+"""

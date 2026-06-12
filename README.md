@@ -18,6 +18,13 @@ The `Deposition build-up` tab shows how the deposited material accumulates from 
 - `Build-up frame` to step through the deposition process
 - `Show individual layers` to switch between separate layer bands and one accumulated fill
 
+The `Point editor` tab lets you edit the dent shape directly, similar to PowerPoint point editing:
+
+- Drag points on the dent curve to reshape it
+- Double-click the editor area to add a new point
+- Select an inner point and use `Delete point` or the `Delete` key to remove it
+- The edited shape immediately updates the `y(x)`, `z(x)`, and build-up plots in that tab
+
 ## Run
 
 ```powershell

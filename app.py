@@ -3,7 +3,10 @@ from dataclasses import dataclass
 import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 from plotly.subplots import make_subplots
+
+from point_editor import make_point_editor_html
 
 
 @dataclass(frozen=True)
@@ -298,6 +301,14 @@ def make_build_up_plot(params, selected_deposition, layer_count, frame_index, sh
     return fig
 
 
+def initial_control_points(params: DentParams, point_count: int = 9):
+    xs = np.linspace(-params.width / 2.0, params.width / 2.0, point_count)
+    ys = dent_profile(xs, params)
+    ys[0] = 0.0
+    ys[-1] = 0.0
+    return [{"x": float(x), "y": float(y)} for x, y in zip(xs, ys)]
+
+
 def main():
     st.set_page_config(page_title="Conformal Deposition Dent Model", layout="wide")
     st.title("Conformal Deposition Dent Model")
@@ -365,7 +376,7 @@ def main():
     metric_cols[2].metric("Max tangent angle z", f"{current_angle:.2f} deg")
     metric_cols[3].metric("W / D", f"{params.width / params.depth:.2f}")
 
-    charts_tab, build_tab = st.tabs(["y(x), z(x)", "Deposition build-up"])
+    charts_tab, build_tab, point_editor_tab = st.tabs(["y(x), z(x)", "Deposition build-up", "Point editor"])
     with charts_tab:
         left, right = st.columns([1.2, 1.0])
         with left:
@@ -386,6 +397,22 @@ def main():
                 bool(show_all_layers),
             ),
             use_container_width=True,
+        )
+
+    with point_editor_tab:
+        components.html(
+            make_point_editor_html(
+                {
+                    "width": params.width,
+                    "depth": params.depth,
+                    "maxDeposition": float(max_deposition),
+                    "selectedDeposition": float(selected_deposition),
+                    "layerCount": int(layer_count),
+                    "points": initial_control_points(params),
+                }
+            ),
+            height=1230,
+            scrolling=True,
         )
 
     st.caption(
