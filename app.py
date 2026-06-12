@@ -305,7 +305,11 @@ def make_build_up_plot(params, selected_deposition, layer_count, frame_index, sh
         legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "left", "x": 0},
         hovermode="x",
     )
-    fig.update_xaxes(title_text="횡방향 위치 (필드 + 덴트 + 필드)")
+    half_width = params.width / 2.0
+    fig.update_xaxes(
+        title_text="횡방향 위치 (필드 + 덴트 + 필드)",
+        range=[-half_width, half_width],
+    )
     fig.update_yaxes(
         title_text="높이",
         scaleanchor="x",

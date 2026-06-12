@@ -497,9 +497,8 @@ _POINT_EDITOR_HTML = r"""
       const yMin = -state.depth * 1.12;
       const yMax = Math.max(activeDepo * 1.18, state.depth * 0.24, 0.25);
       const half = state.width / 2;
-      const margin = fieldMargin();
-      const xMin = -half - margin;
-      const xSpan = state.width + margin * 2;
+      const xMin = -half;
+      const xSpan = state.width;
       const mapX = x => pad.l + ((x - xMin) / xSpan) * (w - pad.l - pad.r);
       const mapY = y => h - pad.b - ((y - yMin) / (yMax - yMin)) * (h - pad.t - pad.b);
       ctx.font = "11px system-ui";
@@ -517,6 +516,10 @@ _POINT_EDITOR_HTML = r"""
       for (let dep = 0; dep <= layers; dep++) {
         surfaces.push(evaluateDeposition(dep, 231, true));
       }
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(pad.l, pad.t, w - pad.l - pad.r, h - pad.t - pad.b);
+      ctx.clip();
       for (let i = 1; i < surfaces.length; i++) {
         const prev = surfaces[i - 1];
         const cur = surfaces[i];
@@ -575,6 +578,7 @@ _POINT_EDITOR_HTML = r"""
         else ctx.lineTo(px, py);
       });
       ctx.stroke();
+      ctx.restore();
       if (last.angleIndex >= 0) {
         const angleX = mapX(last.viewX[last.angleIndex]);
         const angleY = mapY(last.surface[last.angleIndex]);
@@ -636,9 +640,9 @@ _POINT_EDITOR_HTML = r"""
         ctx.fillText(`현재 깊이 ${last.depth.toFixed(2)}`, depthLabelX, depthLabelY + 2);
       }
       ctx.fillStyle = "#64748b";
-      ctx.fillText("필드", pad.l + 8, h - pad.b + 24);
-      ctx.fillText("덴트", mapX(0) - 12, h - pad.b + 24);
-      ctx.fillText("필드", w - pad.r - 36, h - pad.b + 24);
+      ctx.fillText("필드", pad.l + 8, h - pad.b - 8);
+      ctx.fillText("덴트", mapX(0) - 12, h - pad.b - 8);
+      ctx.fillText("필드", w - pad.r - 36, h - pad.b - 8);
     }
 
     function drawEditor() {
