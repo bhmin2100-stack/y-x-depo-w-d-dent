@@ -199,7 +199,8 @@
       selectedId: null,
       draggingId: null,
       editMode: "move",
-      lastTouchAddAt: 0
+      lastTouchAddAt: 0,
+      lastPointerAt: 0
     };
     const defaultPoints = state.points.map(p => ({ ...p, id: p.id }));
     const editor = document.getElementById("editor");
@@ -716,6 +717,11 @@
         };
         c.addEventListener("mousedown", startPointAction);
         c.addEventListener("touchstart", startPointAction, { passive: false });
+        c.addEventListener("pointerdown", evt => {
+          state.lastPointerAt = Date.now();
+          startPointAction(evt);
+          try { c.setPointerCapture(evt.pointerId); } catch (_) {}
+        });
         editor.appendChild(c);
         const label = makeSvg("text", {
           x: xToSvg(point.x) + 9,
@@ -793,6 +799,7 @@
       if (evt.target.tagName.toLowerCase() === "circle") return;
       if (state.editMode !== "add" && evt.type !== "dblclick") return;
       if (evt.type === "click" && Date.now() - state.lastTouchAddAt < 500) return;
+      if (evt.type === "click" && Date.now() - state.lastPointerAt < 500) return;
       evt.preventDefault();
       if (evt.type === "touchend") state.lastTouchAddAt = Date.now();
       addPointFromEvent(evt);
@@ -801,30 +808,41 @@
     editor.addEventListener("dblclick", handleEditorAdd);
     editor.addEventListener("click", handleEditorAdd);
     editor.addEventListener("touchend", handleEditorAdd, { passive: false });
+    editor.addEventListener("pointerdown", evt => {
+      if (evt.target.tagName.toLowerCase() === "circle") return;
+      if (state.editMode !== "add") return;
+      state.lastPointerAt = Date.now();
+      evt.preventDefault();
+      addPointFromEvent(evt);
+    });
 
     function dragMove(evt) {
       if (!state.draggingId) return;
       evt.preventDefault();
       const point = state.points.find(p => p.id === state.draggingId);
       if (!point || point.locked) return;
-      const pts = sortedPoints();
-      const index = pts.findIndex(p => p.id === point.id);
-      const prev = pts[index - 1];
-      const next = pts[index + 1];
       const coord = svgToPoint(evt);
-      const minGap = state.width * 0.012;
-      point.x = clamp(coord.x, prev.x + minGap, next.x - minGap);
+      const half = state.width / 2;
+      const edgeGap = state.width * 0.01;
+      point.x = clamp(coord.x, -half + edgeGap, half - edgeGap);
       point.y = clamp(coord.y, -state.depth * 1.15, 0);
       updateAll();
     }
 
     window.addEventListener("mousemove", dragMove);
     window.addEventListener("touchmove", dragMove, { passive: false });
+    window.addEventListener("pointermove", dragMove, { passive: false });
 
     window.addEventListener("mouseup", () => {
       state.draggingId = null;
     });
     window.addEventListener("touchend", () => {
+      state.draggingId = null;
+    });
+    window.addEventListener("pointerup", () => {
+      state.draggingId = null;
+    });
+    window.addEventListener("pointercancel", () => {
       state.draggingId = null;
     });
 
