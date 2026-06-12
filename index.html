@@ -1,16 +1,10 @@
-import json
 
-
-def make_point_editor_html(config):
-    config_json = json.dumps(config)
-    return _POINT_EDITOR_HTML.replace("__CONFIG__", config_json)
-
-
-_POINT_EDITOR_HTML = r"""
 <!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>컨포멀 증착 덴트 모델</title>
   <style>
     :root {
       --ink: #0f172a;
@@ -156,6 +150,8 @@ _POINT_EDITOR_HTML = r"""
 </head>
 <body>
   <div class="shell">
+    <h1 style="margin:0 0 12px;font-size:28px;line-height:1.2;">컨포멀 증착 덴트 모델</h1>
+    <p style="margin:0 0 14px;color:#64748b;font-size:14px;">아이패드/PC 브라우저에서 바로 쓰는 정적 웹 버전입니다. W, D, 증착량을 조절하고 흰 점을 드래그해서 덴트 형상을 편집하세요.</p>
     <div class="toolbar">
       <div class="control">
         <label for="dentWidth">W: 덴트 폭</label>
@@ -217,7 +213,7 @@ _POINT_EDITOR_HTML = r"""
   </div>
 
   <script>
-    const CONFIG = __CONFIG__;
+    const CONFIG = {"width": 10.0, "depth": 3.0, "maxDeposition": 4.0, "selectedDeposition": 1.5, "layerCount": 12, "points": [{"x": -5.0, "y": 0.0}, {"x": -3.75, "y": -0.4393398282201788}, {"x": -2.5, "y": -1.5}, {"x": -1.25, "y": -2.560660171779821}, {"x": 0.0, "y": -3.0}, {"x": 1.25, "y": -2.560660171779821}, {"x": 2.5, "y": -1.5}, {"x": 3.75, "y": -0.4393398282201788}, {"x": 5.0, "y": 0.0}]};
     let nextId = 1;
     const state = {
       width: CONFIG.width,
@@ -805,4 +801,3 @@ _POINT_EDITOR_HTML = r"""
   </script>
 </body>
 </html>
-"""

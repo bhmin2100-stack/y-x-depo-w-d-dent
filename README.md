@@ -27,6 +27,18 @@
 
 ## 실행
 
+### iPad/브라우저에서 바로 사용
+
+GitHub Pages가 켜져 있으면 아래 주소로 접속해서 Python 설치 없이 바로 사용할 수 있습니다.
+
+```text
+https://bhmin2100-stack.github.io/y-x-depo-w-d-dent/
+```
+
+이 정적 웹 버전은 `index.html` 하나로 동작하며, iPad Safari/Chrome에서도 W, D, 증착량 조절과 덴트 점 편집을 할 수 있습니다.
+
+### PC에서 Streamlit으로 실행
+
 ```powershell
 python -m pip install -r requirements.txt
 python -m streamlit run app.py
