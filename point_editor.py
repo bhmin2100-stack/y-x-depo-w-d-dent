@@ -158,52 +158,52 @@ _POINT_EDITOR_HTML = r"""
   <div class="shell">
     <div class="toolbar">
       <div class="control">
-        <label for="selectedDepo">Selected depo x: <span id="selectedDepoLabel"></span></label>
+        <label for="selectedDepo">선택 증착량 x: <span id="selectedDepoLabel"></span></label>
         <input id="selectedDepo" type="range" min="0" max="1" step="0.01" />
       </div>
       <div class="control">
-        <label for="maxDepo">Max deposition x</label>
+        <label for="maxDepo">최대 증착량 x</label>
         <input id="maxDepo" type="number" min="0.01" step="0.1" />
       </div>
       <div class="control">
-        <label for="buildFrame">Build-up frame: <span id="buildFrameLabel"></span></label>
+        <label for="buildFrame">적층 단계: <span id="buildFrameLabel"></span></label>
         <input id="buildFrame" type="range" min="0" max="12" step="1" />
       </div>
       <div class="control">
-        <label for="layerCount">Layer count</label>
+        <label for="layerCount">층 개수</label>
         <input id="layerCount" type="number" min="3" max="30" step="1" />
       </div>
       <div class="control">
         <div class="toggle">
           <input id="smoothCurve" type="checkbox" checked />
-          <span>Smooth curve</span>
+          <span>부드러운 곡선</span>
         </div>
       </div>
-      <button id="resetBtn" type="button">Reset shape</button>
-      <button id="deleteBtn" type="button">Delete point</button>
+      <button id="resetBtn" type="button">형상 초기화</button>
+      <button id="deleteBtn" type="button">점 삭제</button>
     </div>
 
     <div class="metrics">
-      <div class="metric"><span>Remaining depth y</span><strong id="metricDepth">-</strong></div>
-      <div class="metric"><span>Depth improvement</span><strong id="metricImprove">-</strong></div>
-      <div class="metric"><span>Max tangent angle z</span><strong id="metricAngle">-</strong></div>
-      <div class="metric"><span>Selected point</span><strong id="metricPoint">-</strong></div>
+      <div class="metric"><span>남은 깊이 y</span><strong id="metricDepth">-</strong></div>
+      <div class="metric"><span>깊이 개선</span><strong id="metricImprove">-</strong></div>
+      <div class="metric"><span>최대 접선각 z</span><strong id="metricAngle">-</strong></div>
+      <div class="metric"><span>선택 점</span><strong id="metricPoint">-</strong></div>
     </div>
 
     <div class="grid">
       <section class="panel">
-        <h3>Dent point editor</h3>
+        <h3>덴트 점 편집</h3>
         <svg id="editor" viewBox="0 0 760 390" preserveAspectRatio="none"></svg>
-        <p class="hint">Drag white points to edit the dent. Double-click the curve area to add a point. Select an inner point and press Delete, or use Delete point.</p>
+        <p class="hint">흰 점을 드래그해서 덴트 형상을 수정하세요. 곡선 영역을 더블클릭하면 점이 추가됩니다. 내부 점을 선택한 뒤 Delete 키나 점 삭제 버튼으로 지울 수 있습니다.</p>
       </section>
       <section class="panel">
-        <h3>y(x) and z(x) from edited dent</h3>
+        <h3>편집 형상의 y(x), z(x)</h3>
         <canvas id="sweepCanvas"></canvas>
       </section>
     </div>
 
     <section class="panel wide">
-      <h3>Deposition build-up from edited dent</h3>
+      <h3>편집 형상의 증착 적층 (필드 포함)</h3>
       <canvas id="buildCanvas"></canvas>
     </section>
   </div>
@@ -332,10 +332,15 @@ _POINT_EDITOR_HTML = r"""
       return 0;
     }
 
-    function evaluateDeposition(deposition, sampleCount = 211) {
+    function fieldMargin() {
+      return Math.max(state.width * 0.25, state.maxDepo * 1.05, state.depth * 0.35);
+    }
+
+    function evaluateDeposition(deposition, sampleCount = 211, includeField = false) {
       if (sampleCount % 2 === 0) sampleCount += 1;
       const half = state.width / 2;
-      const margin = Math.max(state.width * 0.35, deposition * 1.4, state.depth * 0.15);
+      const viewMargin = includeField ? fieldMargin() : 0;
+      const margin = Math.max(state.width * 0.35 + viewMargin, deposition * 1.4 + viewMargin, state.depth * 0.15);
       const baseX = [];
       const baseY = [];
       for (let i = 0; i < sampleCount; i++) {
@@ -345,8 +350,10 @@ _POINT_EDITOR_HTML = r"""
       }
       const viewX = [];
       const surface = [];
+      const viewMin = -half - viewMargin;
+      const viewSpan = state.width + viewMargin * 2;
       for (let i = 0; i < sampleCount; i++) {
-        const x = -half + (state.width * i) / (sampleCount - 1);
+        const x = viewMin + (viewSpan * i) / (sampleCount - 1);
         viewX.push(x);
         if (deposition <= 0) {
           surface.push(profileAt(x));
@@ -363,10 +370,12 @@ _POINT_EDITOR_HTML = r"""
         if (!Number.isFinite(highest)) highest = profileAt(x);
         surface.push(Math.min(highest, deposition));
       }
-      const minSurface = Math.min(...surface);
+      const dentSurface = surface.filter((_, index) => Math.abs(viewX[index]) <= half + 1e-9);
+      const minSurface = Math.min(...(dentSurface.length ? dentSurface : surface));
       const depth = Math.max(0, deposition - minSurface);
       let maxSlope = 0;
       for (let i = 1; i < surface.length - 1; i++) {
+        if (Math.abs(viewX[i]) > half) continue;
         const slope = (surface[i + 1] - surface[i - 1]) / (viewX[i + 1] - viewX[i - 1]);
         maxSlope = Math.max(maxSlope, Math.abs(slope));
       }
@@ -468,11 +477,11 @@ _POINT_EDITOR_HTML = r"""
       ctx.setLineDash([]);
       ctx.fillStyle = "#0f172a";
       ctx.font = "12px system-ui";
-      ctx.fillText("x deposition", w / 2 - 36, h - 12);
+      ctx.fillText("x 증착량", w / 2 - 28, h - 12);
       ctx.fillStyle = "#2563eb";
-      ctx.fillText("y depth", 10, pad.t + 12);
+      ctx.fillText("y 깊이", 10, pad.t + 12);
       ctx.fillStyle = "#dc2626";
-      ctx.fillText("z angle", w - pad.r + 8, pad.t + 12);
+      ctx.fillText("z 각도", w - pad.r + 8, pad.t + 12);
     }
 
     function drawBuildCanvas() {
@@ -483,19 +492,28 @@ _POINT_EDITOR_HTML = r"""
       const yMin = -state.depth * 1.12;
       const yMax = Math.max(activeDepo * 1.18, state.depth * 0.24, 0.25);
       const half = state.width / 2;
-      const mapX = x => pad.l + ((x + half) / state.width) * (w - pad.l - pad.r);
+      const margin = fieldMargin();
+      const xMin = -half - margin;
+      const xSpan = state.width + margin * 2;
+      const mapX = x => pad.l + ((x - xMin) / xSpan) * (w - pad.l - pad.r);
       const mapY = y => h - pad.b - ((y - yMin) / (yMax - yMin)) * (h - pad.t - pad.b);
       const layers = Math.max(1, state.buildFrame);
       const surfaces = [];
       for (let i = 0; i <= layers; i++) {
         const dep = activeDepo * i / layers;
-        surfaces.push(evaluateDeposition(dep, 191));
+        surfaces.push(evaluateDeposition(dep, 231, true));
       }
       for (let i = 1; i < surfaces.length; i++) {
         const prev = surfaces[i - 1];
         const cur = surfaces[i];
         const alpha = 0.12 + 0.36 * i / surfaces.length;
-        ctx.fillStyle = `rgba(16, 185, 129, ${alpha})`;
+        const fills = [
+          `rgba(20, 184, 166, ${alpha})`,
+          `rgba(16, 185, 129, ${alpha})`,
+          `rgba(132, 204, 22, ${alpha})`
+        ];
+        const lines = ["rgba(15, 118, 110, 0.75)", "rgba(4, 120, 87, 0.75)", "rgba(77, 124, 15, 0.75)"];
+        ctx.fillStyle = fills[i % fills.length];
         ctx.beginPath();
         cur.viewX.forEach((x, idx) => {
           const px = mapX(x);
@@ -508,6 +526,16 @@ _POINT_EDITOR_HTML = r"""
         }
         ctx.closePath();
         ctx.fill();
+        ctx.strokeStyle = lines[i % lines.length];
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        cur.viewX.forEach((x, idx) => {
+          const px = mapX(x);
+          const py = mapY(cur.surface[idx]);
+          if (idx === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        });
+        ctx.stroke();
       }
       const base = surfaces[0];
       ctx.strokeStyle = "#475569";
@@ -542,7 +570,11 @@ _POINT_EDITOR_HTML = r"""
       ctx.stroke();
       ctx.fillStyle = "#0f172a";
       ctx.font = "12px system-ui";
-      ctx.fillText(`active depo x=${activeDepo.toFixed(3)}`, pad.l + 8, Math.max(pad.t + 14, flatY - 8));
+      ctx.fillText(`현재 증착량 x=${activeDepo.toFixed(3)}`, pad.l + 8, Math.max(pad.t + 14, flatY - 8));
+      ctx.fillStyle = "#64748b";
+      ctx.fillText("필드", pad.l + 8, h - pad.b + 24);
+      ctx.fillText("덴트", mapX(0) - 12, h - pad.b + 24);
+      ctx.fillText("필드", w - pad.r - 36, h - pad.b + 24);
     }
 
     function drawEditor() {
@@ -638,7 +670,7 @@ _POINT_EDITOR_HTML = r"""
       const pct = 100 * improvement / Math.max(state.depth, 1e-9);
       document.getElementById("metricDepth").textContent = result.depth.toFixed(3);
       document.getElementById("metricImprove").textContent = `${improvement.toFixed(3)} (${pct.toFixed(1)}%)`;
-      document.getElementById("metricAngle").textContent = `${result.angle.toFixed(2)} deg`;
+      document.getElementById("metricAngle").textContent = `${result.angle.toFixed(2)}도`;
       document.getElementById("metricPoint").textContent = selectedPointText();
     }
 

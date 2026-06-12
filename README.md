@@ -1,52 +1,52 @@
-# Conformal Deposition Dent Model
+# 컨포멀 증착 덴트 모델
 
-Interactive Python tool for plotting how conformal deposition changes dent depth.
+컨포멀 증착으로 덴트 깊이가 얼마나 개선되는지 인터랙티브하게 확인하는 Python 도구입니다.
 
-## What It Plots
+## 표시 항목
 
-- `x`: conformal deposition amount
-- `y`: remaining dent depth after deposition
-- `W`: dent width controlled by the user
-- `D`: initial dent depth controlled by the user
-- `z`: maximum tangent angle of the deposited top surface, where a flat surface is `0 deg`
+- `x`: 컨포멀 증착량
+- `y`: 증착 후 남은 덴트 깊이
+- `W`: 사용자가 조절하는 덴트 폭
+- `D`: 사용자가 조절하는 초기 덴트 깊이
+- `z`: 평평한 필드(field) 면을 `0도`로 봤을 때 증착 후 상단 표면의 최대 접선각
 
-The graph plots `y(x)` and `z(x)` together. The right-side profile plot shows the initial dent and the deposited shape at the selected deposition amount.
+기본 그래프는 `y(x)`와 `z(x)`를 함께 표시합니다. 오른쪽 단면 그래프는 선택한 증착량에서 초기 덴트와 증착 후 표면을 보여줍니다.
 
-The `Deposition build-up` tab shows how the deposited material accumulates from `0` to the selected deposition amount. Use:
+`증착 적층` 탭은 선택한 증착량까지 재료가 어떻게 쌓이는지 보여줍니다.
 
-- `Layer count` to control how many intermediate deposition shells are drawn
-- `Build-up frame` to step through the deposition process
-- `Show individual layers` to switch between separate layer bands and one accumulated fill
+- `층 개수`: 중간 증착층 개수 조절
+- `적층 단계`: 0부터 선택 증착량까지 단계별 확인
+- `개별 층 경계 표시`: 필드 평탄부까지 포함해 나이테처럼 각 증착층 경계를 표시
 
-The `Point editor` tab lets you edit the dent shape directly, similar to PowerPoint point editing:
+`점 편집` 탭은 PowerPoint 점 편집처럼 덴트 형상을 직접 수정하는 화면입니다.
 
-- Drag points on the dent curve to reshape it
-- Double-click the editor area to add a new point
-- Select an inner point and use `Delete point` or the `Delete` key to remove it
-- The edited shape immediately updates the `y(x)`, `z(x)`, and build-up plots in that tab
+- 덴트 곡선의 흰 점을 드래그해서 형상 수정
+- 편집 영역을 더블클릭해서 새 점 추가
+- 내부 점을 선택한 뒤 `점 삭제` 버튼이나 Delete 키로 삭제
+- 수정된 형상을 기준으로 `y(x)`, `z(x)`, 필드 포함 증착 적층 그래프가 즉시 갱신
 
-## Run
+## 실행
 
 ```powershell
 python -m pip install -r requirements.txt
 python -m streamlit run app.py
 ```
 
-Or double-click:
+또는 아래 파일을 더블클릭합니다.
 
 ```text
 run_app.bat
 ```
 
-## Model
+## 모델
 
-The app treats the 2D dent boundary as the original exposed surface and expands it by the deposition distance `x`. The deposited flat field is at height `x`. The remaining dent depth is:
+앱은 2D 덴트 경계를 원래 노출 표면으로 보고, 그 경계를 증착 거리 `x`만큼 확장한 형태로 컨포멀 증착을 계산합니다. 증착된 필드 상단 높이는 `x`입니다. 남은 덴트 깊이는 다음처럼 계산합니다.
 
 ```text
-y = deposited flat top height - lowest deposited surface inside the dent opening
+y = 증착 후 필드 상단 높이 - 덴트 내부의 가장 낮은 증착 표면 높이
 ```
 
-The angle `z` is computed from the maximum absolute local slope of the deposited top boundary:
+각도 `z`는 증착 후 덴트 내부 상단 경계의 최대 절대 기울기에서 계산합니다.
 
 ```text
 z = atan(max(abs(dy/dx)))
