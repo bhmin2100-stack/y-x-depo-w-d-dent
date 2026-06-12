@@ -12,6 +12,12 @@ Interactive Python tool for plotting how conformal deposition changes dent depth
 
 The graph plots `y(x)` and `z(x)` together. The right-side profile plot shows the initial dent and the deposited shape at the selected deposition amount.
 
+The `Deposition build-up` tab shows how the deposited material accumulates from `0` to the selected deposition amount. Use:
+
+- `Layer count` to control how many intermediate deposition shells are drawn
+- `Build-up frame` to step through the deposition process
+- `Show individual layers` to switch between separate layer bands and one accumulated fill
+
 ## Run
 
 ```powershell

@@ -1,4 +1,3 @@
-import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -182,6 +181,123 @@ def make_profile_plot(params, deposition):
     return fig
 
 
+def make_build_up_plot(params, selected_deposition, layer_count, frame_index, show_all_layers):
+    active_deposition = selected_deposition * frame_index / max(layer_count, 1)
+    visible_layers = max(frame_index, 1)
+    layer_values = np.linspace(0.0, active_deposition, visible_layers + 1)
+
+    surfaces = []
+    view_x = None
+    base_x = None
+    base_y = None
+    for value in layer_values:
+        view_x, surface, _, _, base_x, base_y = evaluate_deposition(params, float(value))
+        surfaces.append(surface)
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=base_x,
+            y=base_y,
+            name="initial dent",
+            mode="lines",
+            line={"width": 2, "color": "#475569"},
+            hovertemplate="position=%{x:.3f}<br>initial height=%{y:.3f}<extra></extra>",
+        )
+    )
+
+    if show_all_layers:
+        previous_surface = surfaces[0]
+        for index, current_surface in enumerate(surfaces[1:], start=1):
+            opacity = 0.16 + 0.34 * index / max(visible_layers, 1)
+            color = f"rgba(16, 185, 129, {opacity:.3f})"
+            fig.add_trace(
+                go.Scatter(
+                    x=view_x,
+                    y=previous_surface,
+                    mode="lines",
+                    line={"width": 0, "color": "rgba(0,0,0,0)"},
+                    showlegend=False,
+                    hoverinfo="skip",
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=view_x,
+                    y=current_surface,
+                    name=f"layer {index}",
+                    mode="lines",
+                    fill="tonexty",
+                    fillcolor=color,
+                    line={"width": 1.5, "color": "#059669"},
+                    hovertemplate=(
+                        f"layer {index}<br>"
+                        f"depo={layer_values[index]:.3f}<br>"
+                        "position=%{x:.3f}<br>height=%{y:.3f}<extra></extra>"
+                    ),
+                )
+            )
+            previous_surface = current_surface
+    else:
+        fig.add_trace(
+            go.Scatter(
+                x=view_x,
+                y=surfaces[0],
+                mode="lines",
+                line={"width": 0, "color": "rgba(0,0,0,0)"},
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=view_x,
+                y=surfaces[-1],
+                name="deposited material",
+                mode="lines",
+                fill="tonexty",
+                fillcolor="rgba(16, 185, 129, 0.42)",
+                line={"width": 3, "color": "#047857"},
+                hovertemplate="position=%{x:.3f}<br>height=%{y:.3f}<extra></extra>",
+            )
+        )
+
+    current_depth = active_deposition - float(np.min(surfaces[-1]))
+    fig.add_hline(
+        y=active_deposition,
+        line_width=2,
+        line_color="#111827",
+        annotation_text=f"flat top = {active_deposition:.3f}",
+        annotation_position="top right",
+    )
+    fig.add_annotation(
+        x=0,
+        y=float(np.min(surfaces[-1])),
+        text=f"remaining depth {current_depth:.3f}",
+        showarrow=True,
+        arrowhead=2,
+        ax=0,
+        ay=-42,
+        bgcolor="rgba(255,255,255,0.86)",
+        bordercolor="#94a3b8",
+    )
+    fig.update_layout(
+        height=560,
+        margin={"l": 10, "r": 10, "t": 45, "b": 10},
+        title=f"Build-up view: depo x={active_deposition:.3f} of selected {selected_deposition:.3f}",
+        legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "left", "x": 0},
+        hovermode="x",
+    )
+    fig.update_xaxes(title_text="lateral position across dent")
+    fig.update_yaxes(
+        title_text="height",
+        scaleanchor="x",
+        scaleratio=1,
+        constrain="domain",
+    )
+    return fig
+
+
 def main():
     st.set_page_config(page_title="Conformal Deposition Dent Model", layout="wide")
     st.title("Conformal Deposition Dent Model")
@@ -222,6 +338,11 @@ def main():
         steps = st.slider("Sweep resolution", min_value=50, max_value=450, value=180, step=10)
         samples = st.slider("Shape resolution", min_value=160, max_value=900, value=360, step=20)
 
+        st.header("Build-up view")
+        layer_count = st.slider("Layer count", min_value=3, max_value=30, value=12, step=1)
+        build_frame = st.slider("Build-up frame", min_value=0, max_value=int(layer_count), value=int(layer_count))
+        show_all_layers = st.checkbox("Show individual layers", value=True)
+
     params = DentParams(
         width=float(width),
         depth=float(depth),
@@ -244,14 +365,28 @@ def main():
     metric_cols[2].metric("Max tangent angle z", f"{current_angle:.2f} deg")
     metric_cols[3].metric("W / D", f"{params.width / params.depth:.2f}")
 
-    left, right = st.columns([1.2, 1.0])
-    with left:
+    charts_tab, build_tab = st.tabs(["y(x), z(x)", "Deposition build-up"])
+    with charts_tab:
+        left, right = st.columns([1.2, 1.0])
+        with left:
+            st.plotly_chart(
+                make_sweep_plot(depositions, depths, angles, selected_deposition),
+                use_container_width=True,
+            )
+        with right:
+            st.plotly_chart(make_profile_plot(params, selected_deposition), use_container_width=True)
+
+    with build_tab:
         st.plotly_chart(
-            make_sweep_plot(depositions, depths, angles, selected_deposition),
+            make_build_up_plot(
+                params,
+                float(selected_deposition),
+                int(layer_count),
+                int(build_frame),
+                bool(show_all_layers),
+            ),
             use_container_width=True,
         )
-    with right:
-        st.plotly_chart(make_profile_plot(params, selected_deposition), use_container_width=True)
 
     st.caption(
         "Model: the initial dent boundary is expanded by the conformal deposition distance x. "
