@@ -74,6 +74,11 @@ _POINT_EDITOR_HTML = r"""
       cursor: pointer;
     }
     button:hover { background: #f1f5f9; }
+    button.active {
+      color: #ffffff;
+      border-color: #1d4ed8;
+      background: #2563eb;
+    }
     .toggle {
       display: flex;
       align-items: center;
@@ -156,6 +161,7 @@ _POINT_EDITOR_HTML = r"""
         </div>
       </div>
       <button id="resetBtn" type="button">형상 초기화</button>
+      <button id="addModeBtn" type="button">점 추가</button>
       <button id="deleteBtn" type="button">점 삭제</button>
     </div>
 
@@ -173,7 +179,7 @@ _POINT_EDITOR_HTML = r"""
     <section class="panel">
       <h3>기본 덴트 구조 점 편집</h3>
       <svg id="editor" viewBox="0 0 760 560" preserveAspectRatio="none"></svg>
-      <p class="hint">이 창은 계산 전 기본 덴트 구조만 보여줍니다. 흰 점을 드래그해서 구조를 수정하고, 곡선 영역을 더블클릭해서 점을 추가하세요. 내부 점은 Delete 키나 점 삭제 버튼으로 지울 수 있습니다.</p>
+      <p class="hint">이 창은 계산 전 기본 덴트 구조만 보여줍니다. 흰 점을 드래그해서 구조를 수정하세요. 점 추가를 켠 뒤 원하는 위치를 터치하면 점이 추가되고, 점 삭제를 켠 뒤 점을 터치하면 삭제됩니다.</p>
     </section>
   </div>
 
@@ -195,7 +201,9 @@ _POINT_EDITOR_HTML = r"""
         locked: index === 0 || index === CONFIG.points.length - 1
       })),
       selectedId: null,
-      draggingId: null
+      draggingId: null,
+      editMode: "move",
+      lastTouchAddAt: 0
     };
     const defaultPoints = state.points.map(p => ({ ...p, id: p.id }));
     const editor = document.getElementById("editor");
@@ -206,6 +214,8 @@ _POINT_EDITOR_HTML = r"""
     const selectedDepoInput = document.getElementById("selectedDepo");
     const maxDepoInput = document.getElementById("maxDepo");
     const smoothInput = document.getElementById("smoothCurve");
+    const addModeBtn = document.getElementById("addModeBtn");
+    const deleteBtn = document.getElementById("deleteBtn");
 
     function clamp(value, min, max) {
       return Math.max(min, Math.min(max, value));
@@ -254,8 +264,9 @@ _POINT_EDITOR_HTML = r"""
 
     function svgToPoint(evt) {
       const rect = editor.getBoundingClientRect();
-      const sx = (evt.clientX - rect.left) * 760 / rect.width;
-      const sy = (evt.clientY - rect.top) * 560 / rect.height;
+      const source = evt.touches && evt.touches.length ? evt.touches[0] : evt.changedTouches && evt.changedTouches.length ? evt.changedTouches[0] : evt;
+      const sx = (source.clientX - rect.left) * 760 / rect.width;
+      const sy = (source.clientY - rect.top) * 560 / rect.height;
       const s = editorScale();
       const x = s.xMin + ((sx - s.padLeft) / s.plotW) * (s.xMax - s.xMin);
       const y = s.yMax - ((sy - s.padTop) / s.plotH) * (s.yMax - s.yMin);
@@ -343,16 +354,26 @@ _POINT_EDITOR_HTML = r"""
       const minSurface = Math.min(...(dentSurface.length ? dentSurface : surface));
       const depth = Math.max(0, deposition - minSurface);
       let maxSlope = 0;
+      let maxSlopeIndex = -1;
       for (let i = 1; i < surface.length - 1; i++) {
         if (Math.abs(viewX[i]) > half) continue;
         const slope = (surface[i + 1] - surface[i - 1]) / (viewX[i + 1] - viewX[i - 1]);
-        maxSlope = Math.max(maxSlope, Math.abs(slope));
+        if (Math.abs(slope) > maxSlope) {
+          maxSlope = Math.abs(slope);
+          maxSlopeIndex = i;
+        }
       }
+      const minIndex = surface.reduce((best, value, index) => {
+        if (Math.abs(viewX[index]) > half) return best;
+        return value < surface[best] ? index : best;
+      }, Math.max(0, surface.findIndex((_, index) => Math.abs(viewX[index]) <= half)));
       return {
         viewX,
         surface,
         depth,
         angle: Math.atan(maxSlope) * 180 / Math.PI,
+        angleIndex: maxSlopeIndex,
+        depthIndex: minIndex,
         baseX,
         baseY
       };
@@ -553,6 +574,30 @@ _POINT_EDITOR_HTML = r"""
         else ctx.lineTo(px, py);
       });
       ctx.stroke();
+      if (last.angleIndex >= 0) {
+        const angleX = mapX(last.viewX[last.angleIndex]);
+        const angleY = mapY(last.surface[last.angleIndex]);
+        ctx.fillStyle = "#dc2626";
+        ctx.strokeStyle = "#dc2626";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(angleX, angleY, 5, 0, Math.PI * 2);
+        ctx.fill();
+        const labelX = Math.min(w - pad.r - 96, Math.max(pad.l + 8, angleX + 12));
+        const labelY = Math.max(pad.t + 20, angleY - 30);
+        ctx.beginPath();
+        ctx.moveTo(angleX + 5, angleY - 4);
+        ctx.lineTo(labelX, labelY + 4);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.fillRect(labelX - 4, labelY - 14, 96, 22);
+        ctx.strokeStyle = "#fecaca";
+        ctx.strokeRect(labelX - 4, labelY - 14, 96, 22);
+        ctx.fillStyle = "#991b1b";
+        ctx.font = "12px system-ui";
+        ctx.textAlign = "left";
+        ctx.fillText(`최대각 ${last.angle.toFixed(1)}도`, labelX, labelY + 1);
+      }
       ctx.strokeStyle = "#111827";
       ctx.lineWidth = 2;
       const flatY = mapY(activeDepo);
@@ -563,6 +608,32 @@ _POINT_EDITOR_HTML = r"""
       ctx.fillStyle = "#0f172a";
       ctx.font = "12px system-ui";
       ctx.fillText(`현재 적층량 x=${activeDepo.toFixed(0)}`, pad.l + 8, Math.max(pad.t + 14, flatY - 8));
+      if (last.depthIndex >= 0) {
+        const depthX = mapX(last.viewX[last.depthIndex]);
+        const depthY = mapY(last.surface[last.depthIndex]);
+        ctx.strokeStyle = "#2563eb";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(depthX, flatY);
+        ctx.lineTo(depthX, depthY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#2563eb";
+        ctx.beginPath();
+        ctx.arc(depthX, depthY, 4, 0, Math.PI * 2);
+        ctx.fill();
+        const depthLabelX = Math.min(w - pad.r - 112, Math.max(pad.l + 8, depthX + 12));
+        const depthLabelY = Math.min(h - pad.b - 20, Math.max(pad.t + 28, (flatY + depthY) / 2));
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.fillRect(depthLabelX - 4, depthLabelY - 15, 112, 23);
+        ctx.strokeStyle = "#bfdbfe";
+        ctx.strokeRect(depthLabelX - 4, depthLabelY - 15, 112, 23);
+        ctx.fillStyle = "#1d4ed8";
+        ctx.font = "12px system-ui";
+        ctx.textAlign = "left";
+        ctx.fillText(`현재 깊이 ${last.depth.toFixed(2)}`, depthLabelX, depthLabelY + 2);
+      }
       ctx.fillStyle = "#64748b";
       ctx.fillText("필드", pad.l + 8, h - pad.b + 24);
       ctx.fillText("덴트", mapX(0) - 12, h - pad.b + 24);
@@ -636,12 +707,19 @@ _POINT_EDITOR_HTML = r"""
           cursor: point.locked ? "default" : "grab",
           "data-id": point.id
         });
-        c.addEventListener("mousedown", evt => {
+        const startPointAction = evt => {
           evt.preventDefault();
           state.selectedId = point.id;
+          if (state.editMode === "delete") {
+            if (!point.locked) deleteSelectedPoint();
+            else updateAll();
+            return;
+          }
           if (!point.locked) state.draggingId = point.id;
           updateAll();
-        });
+        };
+        c.addEventListener("mousedown", startPointAction);
+        c.addEventListener("touchstart", startPointAction, { passive: false });
         editor.appendChild(c);
         const label = makeSvg("text", {
           x: xToSvg(point.x) + 9,
@@ -693,6 +771,8 @@ _POINT_EDITOR_HTML = r"""
       selectedDepoInput.value = String(state.selectedDepo);
       document.getElementById("selectedDepoLabel").textContent = state.selectedDepo.toFixed(0);
       smoothInput.checked = state.smooth;
+      addModeBtn.classList.toggle("active", state.editMode === "add");
+      deleteBtn.classList.toggle("active", state.editMode === "delete");
     }
 
     function updateAll() {
@@ -713,13 +793,22 @@ _POINT_EDITOR_HTML = r"""
       updateAll();
     }
 
-    editor.addEventListener("dblclick", evt => {
+    function handleEditorAdd(evt) {
       if (evt.target.tagName.toLowerCase() === "circle") return;
+      if (state.editMode !== "add" && evt.type !== "dblclick") return;
+      if (evt.type === "click" && Date.now() - state.lastTouchAddAt < 500) return;
+      evt.preventDefault();
+      if (evt.type === "touchend") state.lastTouchAddAt = Date.now();
       addPointFromEvent(evt);
-    });
+    }
 
-    window.addEventListener("mousemove", evt => {
+    editor.addEventListener("dblclick", handleEditorAdd);
+    editor.addEventListener("click", handleEditorAdd);
+    editor.addEventListener("touchend", handleEditorAdd, { passive: false });
+
+    function dragMove(evt) {
       if (!state.draggingId) return;
+      evt.preventDefault();
       const point = state.points.find(p => p.id === state.draggingId);
       if (!point || point.locked) return;
       const pts = sortedPoints();
@@ -731,9 +820,15 @@ _POINT_EDITOR_HTML = r"""
       point.x = clamp(coord.x, prev.x + minGap, next.x - minGap);
       point.y = clamp(coord.y, -state.depth * 1.15, 0);
       updateAll();
-    });
+    }
+
+    window.addEventListener("mousemove", dragMove);
+    window.addEventListener("touchmove", dragMove, { passive: false });
 
     window.addEventListener("mouseup", () => {
+      state.draggingId = null;
+    });
+    window.addEventListener("touchend", () => {
       state.draggingId = null;
     });
 
@@ -751,7 +846,18 @@ _POINT_EDITOR_HTML = r"""
       updateAll();
     }
 
-    document.getElementById("deleteBtn").addEventListener("click", deleteSelectedPoint);
+    deleteBtn.addEventListener("click", () => {
+      if (state.selectedId && state.editMode !== "delete") {
+        deleteSelectedPoint();
+      } else {
+        state.editMode = state.editMode === "delete" ? "move" : "delete";
+        updateAll();
+      }
+    });
+    addModeBtn.addEventListener("click", () => {
+      state.editMode = state.editMode === "add" ? "move" : "add";
+      updateAll();
+    });
     document.getElementById("resetBtn").addEventListener("click", () => {
       state.points = defaultPoints.map(p => ({ ...p, id: nextId++ }));
       state.selectedId = null;

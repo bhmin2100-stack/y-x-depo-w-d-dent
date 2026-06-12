@@ -316,10 +316,21 @@ def make_build_up_plot(params, selected_deposition, layer_count, frame_index, sh
 
 
 def initial_control_points(params: DentParams, point_count: int = 9):
-    xs = np.linspace(-params.width / 2.0, params.width / 2.0, point_count)
-    ys = dent_profile(xs, params)
-    ys[0] = 0.0
-    ys[-1] = 0.0
+    half_width = params.width / 2.0
+    corner_inset = max(params.width * 0.08, 0.01)
+    xs = np.array(
+        [
+            -half_width,
+            -half_width + corner_inset,
+            -half_width + corner_inset,
+            0.0,
+            half_width - corner_inset,
+            half_width - corner_inset,
+            half_width,
+        ],
+        dtype=float,
+    )
+    ys = np.array([0.0, 0.0, -params.depth, -params.depth, -params.depth, 0.0, 0.0], dtype=float)
     return [{"x": float(x), "y": float(y)} for x, y in zip(xs, ys)]
 
 
