@@ -352,25 +352,23 @@ def main():
 
         st.header("증착량 sweep")
         max_deposition = st.number_input(
-            "최대 증착량 x",
-            min_value=0.01,
-            value=float(max(depth * 1.25, width * 0.25)),
-            step=0.25,
+            "최대 적층량",
+            min_value=1,
+            value=int(max(np.ceil(depth * 1.25), np.ceil(width * 0.25), 1)),
+            step=1,
         )
         selected_deposition = st.slider(
-            "선택 증착량 x",
-            min_value=0.0,
-            max_value=float(max_deposition),
-            value=float(min(depth * 0.5, max_deposition)),
-            step=float(max_deposition / 250.0),
+            "현재 적층량",
+            min_value=0,
+            max_value=int(max_deposition),
+            value=int(min(round(depth * 0.5), int(max_deposition))),
+            step=1,
         )
         steps = st.slider("Sweep 해상도", min_value=50, max_value=450, value=180, step=10)
         samples = st.slider("형상 해상도", min_value=160, max_value=900, value=360, step=20)
-
-        st.header("증착 적층 보기")
-        layer_count = st.slider("층 개수", min_value=3, max_value=30, value=12, step=1)
-        build_frame = st.slider("적층 단계", min_value=0, max_value=int(layer_count), value=int(layer_count))
-        show_all_layers = st.checkbox("개별 층 경계 표시", value=True)
+        layer_count = max(1, int(selected_deposition))
+        build_frame = layer_count
+        show_all_layers = True
 
     params = DentParams(
         width=float(width),
@@ -394,7 +392,7 @@ def main():
     metric_cols[2].metric("최대 접선각 z", f"{current_angle:.2f}도")
     metric_cols[3].metric("W / D", f"{params.width / params.depth:.2f}")
 
-    charts_tab, build_tab, point_editor_tab = st.tabs(["y(x), z(x)", "증착 적층", "점 편집"])
+    point_editor_tab, charts_tab, build_tab = st.tabs(["기본 구조 편집", "y(x), z(x)", "증착 적층"])
     with charts_tab:
         left, right = st.columns([1.2, 1.0])
         with left:
@@ -429,7 +427,7 @@ def main():
                     "points": initial_control_points(params),
                 }
             ),
-            height=1230,
+            height=760,
             scrolling=True,
         )
 

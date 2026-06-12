@@ -35,7 +35,7 @@ _POINT_EDITOR_HTML = r"""
     }
     .toolbar {
       display: grid;
-      grid-template-columns: repeat(7, minmax(120px, 1fr));
+      grid-template-columns: repeat(6, minmax(120px, 1fr));
       gap: 10px;
       align-items: end;
       margin-bottom: 12px;
@@ -83,32 +83,11 @@ _POINT_EDITOR_HTML = r"""
       font-weight: 650;
       color: #334155;
     }
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      margin: 8px 0 14px;
-    }
-    .metric {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 10px 12px;
-      background: #fff;
-    }
-    .metric span {
-      display: block;
-      font-size: 12px;
-      color: var(--muted);
-      margin-bottom: 3px;
-    }
-    .metric strong {
-      font-size: 22px;
-      font-weight: 750;
-    }
     .grid {
       display: grid;
       grid-template-columns: minmax(420px, 1fr) minmax(420px, 1fr);
       gap: 14px;
+      margin-bottom: 14px;
     }
     .panel {
       min-width: 0;
@@ -121,10 +100,9 @@ _POINT_EDITOR_HTML = r"""
       margin: 0 0 8px;
       font-size: 15px;
     }
-    .wide { margin-top: 14px; }
     #editor {
       width: 100%;
-      height: 390px;
+      height: 560px;
       display: block;
       border: 1px solid #e2e8f0;
       border-radius: 8px;
@@ -134,13 +112,12 @@ _POINT_EDITOR_HTML = r"""
     }
     canvas {
       width: 100%;
-      height: 390px;
+      height: 430px;
       display: block;
       border: 1px solid #e2e8f0;
       border-radius: 8px;
       background: #fff;
     }
-    #buildCanvas { height: 460px; }
     .hint {
       margin: 8px 0 0;
       color: var(--muted);
@@ -149,7 +126,6 @@ _POINT_EDITOR_HTML = r"""
     }
     @media (max-width: 900px) {
       .toolbar { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
-      .metrics { grid-template-columns: repeat(2, 1fr); }
       .grid { grid-template-columns: 1fr; }
     }
   </style>
@@ -166,20 +142,12 @@ _POINT_EDITOR_HTML = r"""
         <input id="dentDepth" type="number" min="0.1" step="0.1" />
       </div>
       <div class="control">
-        <label for="selectedDepo">선택 증착량 x: <span id="selectedDepoLabel"></span></label>
-        <input id="selectedDepo" type="range" min="0" max="1" step="0.01" />
+        <label for="maxDepo">최대 적층량</label>
+        <input id="maxDepo" type="number" min="1" step="1" />
       </div>
       <div class="control">
-        <label for="maxDepo">최대 증착량 x</label>
-        <input id="maxDepo" type="number" min="0.01" step="0.1" />
-      </div>
-      <div class="control">
-        <label for="buildFrame">적층 단계: <span id="buildFrameLabel"></span></label>
-        <input id="buildFrame" type="range" min="0" max="12" step="1" />
-      </div>
-      <div class="control">
-        <label for="layerCount">층 개수</label>
-        <input id="layerCount" type="number" min="3" max="30" step="1" />
+        <label for="selectedDepo">현재 적층량: <span id="selectedDepoLabel"></span></label>
+        <input id="selectedDepo" type="range" min="0" max="1" step="1" />
       </div>
       <div class="control">
         <div class="toggle">
@@ -191,28 +159,21 @@ _POINT_EDITOR_HTML = r"""
       <button id="deleteBtn" type="button">점 삭제</button>
     </div>
 
-    <div class="metrics">
-      <div class="metric"><span>남은 깊이 y</span><strong id="metricDepth">-</strong></div>
-      <div class="metric"><span>깊이 개선</span><strong id="metricImprove">-</strong></div>
-      <div class="metric"><span>최대 접선각 z</span><strong id="metricAngle">-</strong></div>
-      <div class="metric"><span>선택 점</span><strong id="metricPoint">-</strong></div>
-    </div>
-
     <div class="grid">
       <section class="panel">
-        <h3>덴트 점 편집</h3>
-        <svg id="editor" viewBox="0 0 760 390" preserveAspectRatio="none"></svg>
-        <p class="hint">흰 점을 드래그해서 덴트 형상을 수정하세요. 곡선 영역을 더블클릭하면 점이 추가됩니다. 내부 점을 선택한 뒤 Delete 키나 점 삭제 버튼으로 지울 수 있습니다.</p>
+        <h3>y(x), z(x) 그래프</h3>
+        <canvas id="sweepCanvas"></canvas>
       </section>
       <section class="panel">
-        <h3>편집 형상의 y(x), z(x)</h3>
-        <canvas id="sweepCanvas"></canvas>
+        <h3>쌓이는 모습 (1 단위 적층)</h3>
+        <canvas id="buildCanvas"></canvas>
       </section>
     </div>
 
-    <section class="panel wide">
-      <h3>편집 형상의 증착 적층 (필드 포함)</h3>
-      <canvas id="buildCanvas"></canvas>
+    <section class="panel">
+      <h3>기본 덴트 구조 점 편집</h3>
+      <svg id="editor" viewBox="0 0 760 560" preserveAspectRatio="none"></svg>
+      <p class="hint">이 창은 계산 전 기본 덴트 구조만 보여줍니다. 흰 점을 드래그해서 구조를 수정하고, 곡선 영역을 더블클릭해서 점을 추가하세요. 내부 점은 Delete 키나 점 삭제 버튼으로 지울 수 있습니다.</p>
     </section>
   </div>
 
@@ -244,8 +205,6 @@ _POINT_EDITOR_HTML = r"""
     const dentDepthInput = document.getElementById("dentDepth");
     const selectedDepoInput = document.getElementById("selectedDepo");
     const maxDepoInput = document.getElementById("maxDepo");
-    const buildFrameInput = document.getElementById("buildFrame");
-    const layerCountInput = document.getElementById("layerCount");
     const smoothInput = document.getElementById("smoothCurve");
 
     function clamp(value, min, max) {
@@ -277,9 +236,9 @@ _POINT_EDITOR_HTML = r"""
         yMax: yr.max,
         padLeft, padRight, padTop, padBottom,
         width: 760,
-        height: 390,
+        height: 560,
         plotW: 760 - padLeft - padRight,
-        plotH: 390 - padTop - padBottom
+        plotH: 560 - padTop - padBottom
       };
     }
 
@@ -296,7 +255,7 @@ _POINT_EDITOR_HTML = r"""
     function svgToPoint(evt) {
       const rect = editor.getBoundingClientRect();
       const sx = (evt.clientX - rect.left) * 760 / rect.width;
-      const sy = (evt.clientY - rect.top) * 390 / rect.height;
+      const sy = (evt.clientY - rect.top) * 560 / rect.height;
       const s = editorScale();
       const x = s.xMin + ((sx - s.padLeft) / s.plotW) * (s.xMax - s.xMin);
       const y = s.yMax - ((sy - s.padTop) / s.plotH) * (s.yMax - s.yMin);
@@ -463,6 +422,20 @@ _POINT_EDITOR_HTML = r"""
       const mapX = x => pad.l + (x / xMax) * (w - pad.l - pad.r);
       const mapY = y => h - pad.b - (y / yMax) * (h - pad.t - pad.b);
       const mapZ = z => h - pad.b - (z / zMax) * (h - pad.t - pad.b);
+      ctx.font = "11px system-ui";
+      ctx.fillStyle = "#64748b";
+      for (let i = 0; i <= 5; i++) {
+        const xValue = xMax * i / 5;
+        const yValue = yMax * i / 5;
+        const zValue = zMax * i / 5;
+        const x = mapX(xValue);
+        ctx.textAlign = "center";
+        ctx.fillText(xValue.toFixed(0), x, h - pad.b + 18);
+        ctx.textAlign = "right";
+        ctx.fillText(yValue.toFixed(1), pad.l - 8, mapY(yValue) + 4);
+        ctx.textAlign = "left";
+        ctx.fillText(zValue.toFixed(0), w - pad.r + 6, mapZ(zValue) + 4);
+      }
       function line(values, mapper, color) {
         ctx.strokeStyle = color;
         ctx.lineWidth = 2.6;
@@ -498,7 +471,7 @@ _POINT_EDITOR_HTML = r"""
       const { ctx, w, h } = setupCanvas(buildCanvas);
       const pad = { l: 58, r: 22, t: 30, b: 44 };
       drawAxes(ctx, w, h, pad);
-      const activeDepo = state.selectedDepo * state.buildFrame / Math.max(state.layerCount, 1);
+      const activeDepo = Math.round(state.selectedDepo);
       const yMin = -state.depth * 1.12;
       const yMax = Math.max(activeDepo * 1.18, state.depth * 0.24, 0.25);
       const half = state.width / 2;
@@ -507,10 +480,19 @@ _POINT_EDITOR_HTML = r"""
       const xSpan = state.width + margin * 2;
       const mapX = x => pad.l + ((x - xMin) / xSpan) * (w - pad.l - pad.r);
       const mapY = y => h - pad.b - ((y - yMin) / (yMax - yMin)) * (h - pad.t - pad.b);
-      const layers = Math.max(1, state.buildFrame);
+      ctx.font = "11px system-ui";
+      ctx.fillStyle = "#64748b";
+      for (let i = 0; i <= 5; i++) {
+        const xValue = xMin + xSpan * i / 5;
+        const yValue = yMin + (yMax - yMin) * i / 5;
+        ctx.textAlign = "center";
+        ctx.fillText(xValue.toFixed(1), mapX(xValue), h - pad.b + 18);
+        ctx.textAlign = "right";
+        ctx.fillText(yValue.toFixed(1), pad.l - 8, mapY(yValue) + 4);
+      }
+      const layers = Math.max(0, activeDepo);
       const surfaces = [];
-      for (let i = 0; i <= layers; i++) {
-        const dep = activeDepo * i / layers;
+      for (let dep = 0; dep <= layers; dep++) {
         surfaces.push(evaluateDeposition(dep, 231, true));
       }
       for (let i = 1; i < surfaces.length; i++) {
@@ -580,7 +562,7 @@ _POINT_EDITOR_HTML = r"""
       ctx.stroke();
       ctx.fillStyle = "#0f172a";
       ctx.font = "12px system-ui";
-      ctx.fillText(`현재 증착량 x=${activeDepo.toFixed(3)}`, pad.l + 8, Math.max(pad.t + 14, flatY - 8));
+      ctx.fillText(`현재 적층량 x=${activeDepo.toFixed(0)}`, pad.l + 8, Math.max(pad.t + 14, flatY - 8));
       ctx.fillStyle = "#64748b";
       ctx.fillText("필드", pad.l + 8, h - pad.b + 24);
       ctx.fillText("덴트", mapX(0) - 12, h - pad.b + 24);
@@ -600,6 +582,26 @@ _POINT_EDITOR_HTML = r"""
         const y = s.padTop + s.plotH * i / 6;
         editor.appendChild(makeSvg("line", { x1: x, y1: s.padTop, x2: x, y2: s.padTop + s.plotH, stroke: "#eef2f7", "stroke-width": 1 }));
         editor.appendChild(makeSvg("line", { x1: s.padLeft, y1: y, x2: s.padLeft + s.plotW, y2: y, stroke: "#eef2f7", "stroke-width": 1 }));
+        const xValue = s.xMin + (s.xMax - s.xMin) * i / 6;
+        const yValue = s.yMax - (s.yMax - s.yMin) * i / 6;
+        const xLabel = makeSvg("text", {
+          x,
+          y: s.padTop + s.plotH + 22,
+          fill: "#64748b",
+          "font-size": 11,
+          "text-anchor": "middle"
+        });
+        xLabel.textContent = xValue.toFixed(1);
+        editor.appendChild(xLabel);
+        const yLabel = makeSvg("text", {
+          x: s.padLeft - 8,
+          y: y + 4,
+          fill: "#64748b",
+          "font-size": 11,
+          "text-anchor": "end"
+        });
+        yLabel.textContent = yValue.toFixed(1);
+        editor.appendChild(yLabel);
       }
       const samples = [];
       for (let i = 0; i <= 180; i++) {
@@ -650,9 +652,28 @@ _POINT_EDITOR_HTML = r"""
         label.textContent = index + 1;
         editor.appendChild(label);
       });
-      const axisText = makeSvg("text", { x: s.padLeft, y: 382, fill: "#64748b", "font-size": 12 });
+      const axisText = makeSvg("text", { x: s.padLeft, y: 552, fill: "#64748b", "font-size": 12 });
       axisText.textContent = `W=${state.width.toFixed(3)}, D=${state.depth.toFixed(3)}`;
       editor.appendChild(axisText);
+      const xAxisText = makeSvg("text", {
+        x: s.padLeft + s.plotW / 2,
+        y: 552,
+        fill: "#334155",
+        "font-size": 12,
+        "text-anchor": "middle"
+      });
+      xAxisText.textContent = "x 위치";
+      editor.appendChild(xAxisText);
+      const yAxisText = makeSvg("text", {
+        x: 15,
+        y: s.padTop + s.plotH / 2,
+        fill: "#334155",
+        "font-size": 12,
+        "text-anchor": "middle",
+        transform: `rotate(-90 15 ${s.padTop + s.plotH / 2})`
+      });
+      yAxisText.textContent = "y 높이";
+      editor.appendChild(yAxisText);
     }
 
     function selectedPointText() {
@@ -662,36 +683,23 @@ _POINT_EDITOR_HTML = r"""
     }
 
     function syncControls() {
-      selectedDepoInput.max = String(state.maxDepo);
-      selectedDepoInput.step = String(Math.max(state.maxDepo / 250, 0.001));
-      selectedDepoInput.value = String(state.selectedDepo);
       dentWidthInput.value = String(state.width);
       dentDepthInput.value = String(state.depth);
+      state.maxDepo = Math.max(1, Math.round(state.maxDepo));
+      state.selectedDepo = Math.max(0, Math.min(Math.round(state.selectedDepo), state.maxDepo));
       maxDepoInput.value = String(state.maxDepo);
-      layerCountInput.value = String(state.layerCount);
-      buildFrameInput.max = String(state.layerCount);
-      buildFrameInput.value = String(state.buildFrame);
+      selectedDepoInput.max = String(state.maxDepo);
+      selectedDepoInput.step = "1";
+      selectedDepoInput.value = String(state.selectedDepo);
+      document.getElementById("selectedDepoLabel").textContent = state.selectedDepo.toFixed(0);
       smoothInput.checked = state.smooth;
-      document.getElementById("selectedDepoLabel").textContent = state.selectedDepo.toFixed(3);
-      document.getElementById("buildFrameLabel").textContent = `${state.buildFrame}/${state.layerCount}`;
-    }
-
-    function updateMetrics() {
-      const result = evaluateDeposition(state.selectedDepo, 211);
-      const improvement = Math.max(0, state.depth - result.depth);
-      const pct = 100 * improvement / Math.max(state.depth, 1e-9);
-      document.getElementById("metricDepth").textContent = result.depth.toFixed(3);
-      document.getElementById("metricImprove").textContent = `${improvement.toFixed(3)} (${pct.toFixed(1)}%)`;
-      document.getElementById("metricAngle").textContent = `${result.angle.toFixed(2)}도`;
-      document.getElementById("metricPoint").textContent = selectedPointText();
     }
 
     function updateAll() {
       syncControls();
-      drawEditor();
-      updateMetrics();
       drawSweepCanvas();
       drawBuildCanvas();
+      drawEditor();
     }
 
     function addPointFromEvent(evt) {
@@ -777,23 +785,13 @@ _POINT_EDITOR_HTML = r"""
       state.selectedDepo = Math.min(state.selectedDepo, state.maxDepo);
       updateAll();
     });
-    selectedDepoInput.addEventListener("input", evt => {
-      state.selectedDepo = Number(evt.target.value);
-      updateAll();
-    });
     maxDepoInput.addEventListener("change", evt => {
-      state.maxDepo = Math.max(0.01, Number(evt.target.value) || state.maxDepo);
+      state.maxDepo = Math.max(1, Math.round(Number(evt.target.value) || state.maxDepo));
       state.selectedDepo = Math.min(state.selectedDepo, state.maxDepo);
       updateAll();
     });
-    buildFrameInput.addEventListener("input", evt => {
-      state.buildFrame = Math.round(Number(evt.target.value));
-      updateAll();
-    });
-    layerCountInput.addEventListener("change", evt => {
-      state.layerCount = Math.max(3, Math.min(30, Math.round(Number(evt.target.value) || state.layerCount)));
-      state.buildFrame = Math.min(state.buildFrame, state.layerCount);
-      buildFrameInput.max = String(state.layerCount);
+    selectedDepoInput.addEventListener("input", evt => {
+      state.selectedDepo = Math.round(Number(evt.target.value));
       updateAll();
     });
     smoothInput.addEventListener("change", evt => {
